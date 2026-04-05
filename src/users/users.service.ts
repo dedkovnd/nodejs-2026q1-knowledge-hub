@@ -1,12 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { User } from './interfaces/user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
+import { ArticlesService } from '../articles/articles.service';
 
 @Injectable()
 export class UsersService {
   private users: User[] = [];
+
+  constructor(
+    @Inject(forwardRef(() => ArticlesService))
+    private readonly articlesService: ArticlesService,
+  ) {}
 
   findAll(): Omit<User, 'password'>[] {
     return this.users.map(({ password, ...user }) => user);
@@ -22,7 +28,16 @@ export class UsersService {
     return result;
   }
 
+  findOneWithPassword(id: string): User | undefined {
+    return this.users.find(u => u.id === id);
+  }
+
   create(createUserDto: CreateUserDto): Omit<User, 'password'> {
+    const existingUser = this.users.find(u => u.login === createUserDto.login);
+    if (existingUser) {
+      throw new BadRequestException('User with this login already exists');
+    }
+
     const newUser: User = {
       id: randomUUID(),
       login: createUserDto.login,
@@ -62,6 +77,10 @@ export class UsersService {
     if (userIndex === -1) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
+    
+    // Каскадные операции: обнуляем authorId в статьях
+    this.articlesService.onUserDelete(id);
+    
     this.users.splice(userIndex, 1);
   }
 
