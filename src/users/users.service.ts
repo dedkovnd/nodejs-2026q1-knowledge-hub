@@ -4,6 +4,7 @@ import { User } from './interfaces/user.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { ArticlesService } from '../articles/articles.service';
+import { CommentsService } from '../comments/comments.service';
 
 @Injectable()
 export class UsersService {
@@ -12,6 +13,8 @@ export class UsersService {
   constructor(
     @Inject(forwardRef(() => ArticlesService))
     private readonly articlesService: ArticlesService,
+    @Inject(forwardRef(() => CommentsService))
+    private readonly commentsService: CommentsService,
   ) {}
 
   findAll(): Omit<User, 'password'>[] {
@@ -19,7 +22,7 @@ export class UsersService {
   }
 
   findOne(id: string): Omit<User, 'password'> {
-    this.validateId(id);
+    this.validateUuid(id);
     const user = this.users.find(u => u.id === id);
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
@@ -52,7 +55,7 @@ export class UsersService {
   }
 
   updatePassword(id: string, updatePasswordDto: UpdatePasswordDto): Omit<User, 'password'> {
-    this.validateId(id);
+    this.validateUuid(id);
     const userIndex = this.users.findIndex(u => u.id === id);
     if (userIndex === -1) {
       throw new NotFoundException(`User with id ${id} not found`);
@@ -72,19 +75,19 @@ export class UsersService {
   }
 
   delete(id: string): void {
-    this.validateId(id);
+    this.validateUuid(id);
     const userIndex = this.users.findIndex(u => u.id === id);
     if (userIndex === -1) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
     
-    // Каскадные операции: обнуляем authorId в статьях
     this.articlesService.onUserDelete(id);
+    this.commentsService.onUserDelete(id);
     
     this.users.splice(userIndex, 1);
   }
 
-  private validateId(id: string): void {
+  private validateUuid(id: string): void {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       throw new BadRequestException('Invalid UUID format');
